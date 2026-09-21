@@ -1,0 +1,15 @@
+/* === Tailwind v3 — src/app/globals.css ===
+   Estas três linhas têm de existir no topo do ficheiro. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* === Tailwind v4 — em vez das três linhas acima, use: ===
+@import "tailwindcss";
+@source "../../src";
+*/
+
+html,
+body {
+  background-color: #f9fafb; /* gray-50 */
+}

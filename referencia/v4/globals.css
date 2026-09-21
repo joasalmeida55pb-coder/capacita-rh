@@ -1,0 +1,7 @@
+/* Tailwind v4 — src/app/globals.css
+   Em v4 NÃO se usa @tailwind base/components/utilities,
+   e o tailwind.config.ts deixa de ser necessário. */
+@import "tailwindcss";
+
+/* Se as suas páginas estiverem fora do scan automático: */
+@source "../../src";

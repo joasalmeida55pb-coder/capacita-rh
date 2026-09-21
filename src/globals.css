@@ -1,0 +1,30 @@
+/* ============================================================================
+ * Capacita RH — src/app/globals.css
+ * Tailwind CSS v4 (projeto em tailwindcss@4.3.3 + @tailwindcss/postcss@4.3.3)
+ * ==========================================================================*/
+
+/* Em v4 é ISTO. Uma linha, e mais nada. */
+@import "tailwindcss";
+
+/* NÃO usar em v4 — estas diretivas são de v3 e fazem o build gerar ZERO CSS:
+     @tailwind base;
+     @tailwind components;
+     @tailwind utilities;
+*/
+
+/* O v4 deteta as fontes sozinho a partir da raiz do projeto e respeita o
+   .gitignore. Esta linha é um reforço explícito para a pasta src/.
+   Caminho relativo a este ficheiro (src/app/globals.css → raiz → src). */
+@source "../../src";
+
+/* Tokens da marca (opcional). Em v4 o tema vive aqui, não no
+   tailwind.config.ts — esse ficheiro deixou de ser lido automaticamente.
+   Se ainda quiser usá-lo, tem de o declarar: @config "../../tailwind.config.ts"; */
+@theme {
+  --color-marca: var(--color-emerald-600);
+}
+
+html,
+body {
+  background-color: var(--color-gray-50);
+}
