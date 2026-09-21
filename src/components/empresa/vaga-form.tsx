@@ -8,8 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { SETORES, periodoParaTipoContrato } from "@/lib/constants";
 import { trilhas } from "@/lib/mock-data";
-import type { ResultadoPublicacao } from "@/hooks/use-vagas";
 import type { Empresa, Setor, Vaga } from "@/types";
+
+/** Resultado de uma tentativa de publicar a vaga (Supabase ou fallback local). */
+export interface ResultadoPublicacao {
+  vaga: Vaga;
+  gravadoEm: "supabase" | "local";
+  erro?: string | null;
+}
 
 export function VagaForm({
   empresa,

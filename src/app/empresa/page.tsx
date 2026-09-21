@@ -493,7 +493,7 @@ function Painel({
       )
 
     const contagem: Record<string, number> = {}
-    ;(cands ?? []).forEach((c: Candidatura) => {
+    ;(cands ?? []).forEach((c: Pick<Candidatura, 'id' | 'vaga_id'>) => {
       if (!c.vaga_id) return
       contagem[c.vaga_id] = (contagem[c.vaga_id] ?? 0) + 1
     })

@@ -53,4 +53,24 @@ if (process.env.NODE_ENV !== 'production') {
   globalThis.__capacitaSupabase__ = supabase;
 }
 
+/**
+ * `true` quando há URL + chave anônima resolvidas (mesmo que venham do
+ * fallback embutido acima). As telas que consultam o Supabase usam esta
+ * flag para decidir se tentam a rede antes de caírem nos dados de exemplo.
+ */
+export const supabaseConfigurado: boolean = Boolean(SUPABASE_URL) && Boolean(SUPABASE_ANON_KEY);
+
+/** Extrai uma mensagem legível de um erro devolvido pelo cliente Supabase. */
+export function mensagemDeErro(erro: unknown): string {
+  if (
+    erro &&
+    typeof erro === 'object' &&
+    'message' in erro &&
+    typeof (erro as { message?: unknown }).message === 'string'
+  ) {
+    return (erro as { message: string }).message;
+  }
+  return 'Erro desconhecido ao comunicar com o Supabase.';
+}
+
 export default supabase;

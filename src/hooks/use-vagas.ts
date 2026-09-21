@@ -1,104 +1,52 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useCallback, useEffect, useState } from "react";
+import { listarVagas } from "@/lib/vagas-service";
+import { vagasSeed } from "@/lib/mock-data";
+import { useLocalStorageState } from "@/hooks/use-local-storage-state";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
+import type { Vaga } from "@/types";
+
+export type FonteVagas = "supabase" | "mock";
 
 /**
- * Espelha EXACTAMENTE `public.vagas`:
- *   id uuid | created_at timestamptz | empresa_id uuid NULL | titulo text | descricao text
+ * Lista todas as vagas ativas.
  *
- * `empresa_id` é NULLABLE mas tem FOREIGN KEY para empresas(id):
- * ou é NULL, ou é o id de uma empresa que existe mesmo na base.
- * Um uuid inventado (opção local de fallback) provoca erro 23503.
+ * 1. Consulta a tabela `vagas` no Supabase (via `listarVagas`, que já
+ *    traduz cada linha para o tipo `Vaga` de `@/types`).
+ * 2. Quando a consulta falha, ou o banco ainda não tem nenhuma vaga ativa,
+ *    cai para as vagas de exemplo (`vagasSeed`) combinadas com as vagas
+ *    publicadas localmente (guardadas quando o Supabase não estava
+ *    acessível no momento da publicação).
  */
-export type Vaga = {
-  id: string;
-  created_at: string;
-  empresa_id: string | null;
-  titulo: string | null;
-  descricao: string | null;
-};
-
-export type NovaVaga = {
-  empresa_id?: string | null;
-  titulo: string;
-  descricao?: string | null;
-};
-
-const COLUNAS_VAGAS = 'id, created_at, empresa_id, titulo, descricao';
-
-function sanitizar(input: NovaVaga) {
-  const empresaId = (input.empresa_id ?? '').trim();
-  return {
-    empresa_id: empresaId.length > 0 ? empresaId : null,
-    titulo: input.titulo?.trim() ?? '',
-    descricao: input.descricao?.trim() || null,
-  };
-}
-
-export function useVagas(empresaId?: string) {
-  const [vagas, setVagas] = useState<Vaga[]>([]);
+export function useVagas() {
+  const [vagasLocais] = useLocalStorageState<Vaga[]>(STORAGE_KEYS.vagas, []);
+  const [vagasRemotas, setVagasRemotas] = useState<Vaga[] | null>(null);
   const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState<string | null>(null);
+  const [erroConexao, setErroConexao] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
-    setErro(null);
-
-    let query = supabase
-      .from('vagas')
-      .select(COLUNAS_VAGAS)
-      .order('created_at', { ascending: false });
-
-    if (empresaId) query = query.eq('empresa_id', empresaId);
-
-    const { data, error } = await query;
-
-    if (error) {
-      setErro(error.message);
-      setVagas([]);
-    } else {
-      setVagas((data ?? []) as Vaga[]);
-    }
-
+    const { dados, erro } = await listarVagas();
+    setVagasRemotas(dados);
+    setErroConexao(erro);
     setCarregando(false);
-  }, [empresaId]);
+  }, []);
 
   useEffect(() => {
     void carregar();
   }, [carregar]);
 
-  const criarVaga = useCallback(
-    async (input: NovaVaga): Promise<{ vaga: Vaga | null; erro: string | null }> => {
-      const payload = sanitizar(input);
+  const temVagasRemotas = (vagasRemotas?.length ?? 0) > 0;
+  const vagasMock = [...vagasLocais, ...vagasSeed];
 
-      if (!payload.titulo) {
-        return { vaga: null, erro: 'O título da vaga é obrigatório.' };
-      }
-
-      const { data, error } = await supabase
-        .from('vagas')
-        .insert(payload)
-        .select(COLUNAS_VAGAS)
-        .single();
-
-      if (error) {
-        const mensagem =
-          error.code === '23503'
-            ? 'A empresa selecionada já não existe na base de dados. Recarregue a página.'
-            : error.message;
-        setErro(mensagem);
-        return { vaga: null, erro: mensagem };
-      }
-
-      const vaga = data as Vaga;
-      setVagas((anteriores) => [vaga, ...anteriores]);
-      return { vaga, erro: null };
-    },
-    [],
-  );
-
-  return { vagas, carregando, erro, carregar, criarVaga };
+  return {
+    vagas: temVagasRemotas ? (vagasRemotas as Vaga[]) : vagasMock,
+    fonte: (temVagasRemotas ? "supabase" : "mock") as FonteVagas,
+    carregando,
+    erroConexao,
+    recarregar: carregar,
+  };
 }
 
 export default useVagas;
