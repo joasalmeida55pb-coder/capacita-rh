@@ -5,6 +5,14 @@
  * A tradução entre a linha do banco (snake_case) e esse tipo acontece aqui,
  * num único lugar.
  *
+ * IMPORTANTE: o schema real de `public.vagas` (o mesmo que `/empresa` usa com
+ * sucesso, via `select('*')`) só tem as colunas abaixo — NÃO existem
+ * `empresa_nome`, `empresa_local_id`, `categoria`, `carga_horaria`,
+ * `trilha_requerida_id` nem `aceita_capacitacao` (essas eram de uma versão
+ * antiga do schema, em `supabase/schema.sql`, que nunca chegou a ser aplicada
+ * no banco real). O nome e o setor da empresa vêm de um join com `empresas`
+ * através da FK `vagas.empresa_id -> empresas.id`.
+ *
  * Nenhuma função abaixo lança exceção: elas sempre devolvem
  * `{ dados, erro }`, e quem chama decide se cai para o mock.
  */
@@ -13,33 +21,28 @@ import { supabase, supabaseConfigurado, mensagemDeErro } from "@/lib/supabase";
 import { SETORES } from "@/lib/constants";
 import type { Setor, TipoContrato, Vaga } from "@/types";
 
-/** Linha da tabela `public.vagas` (ver supabase/schema.sql). */
+/** Linha real da tabela `public.vagas`, com o nome/setor da empresa embutidos via join. */
 export interface VagaRow {
   id: string;
   created_at: string;
   empresa_id: string | null;
-  empresa_nome: string | null;
-  empresa_local_id: string | null;
-  titulo: string;
-  descricao: string;
-  categoria: string | null;
+  titulo: string | null;
+  descricao: string | null;
   regime: string | null;
   modalidade: string | null;
-  carga_horaria: string | null;
   salario: string | null;
   beneficios: string | null;
   requisitos: string | null;
   bairro: string | null;
   cidade: string | null;
-  trilha_requerida_id: string | null;
-  aceita_capacitacao: boolean | null;
   status: string | null;
+  /** Join `vagas.empresa_id -> empresas.id` (Supabase embeda como objeto ou null). */
+  empresas: { nome: string | null; setor: string | null } | null;
 }
 
 const COLUNAS =
-  "id, created_at, empresa_id, empresa_nome, empresa_local_id, titulo, descricao, " +
-  "categoria, regime, modalidade, carga_horaria, salario, beneficios, requisitos, " +
-  "bairro, cidade, trilha_requerida_id, aceita_capacitacao, status";
+  "id, created_at, empresa_id, titulo, descricao, regime, modalidade, salario, " +
+  "beneficios, requisitos, bairro, cidade, status, empresas(nome, setor)";
 
 const TIPOS_CONTRATO: TipoContrato[] = ["CLT", "Temporário", "Meio período"];
 
@@ -69,47 +72,46 @@ function comoTipoContrato(valor: string | null | undefined): TipoContrato {
 export function linhaParaVaga(row: VagaRow): Vaga {
   return {
     id: row.id,
-    titulo: row.titulo,
-    empresa: row.empresa_nome?.trim() || "Empresa parceira",
-    empresaId: row.empresa_local_id ?? row.empresa_id ?? undefined,
-    categoria: comoSetor(row.categoria),
+    titulo: row.titulo?.trim() || "Vaga sem título",
+    empresa: row.empresas?.nome?.trim() || "Empresa parceira",
+    empresaId: row.empresa_id ?? undefined,
+    // Não há coluna `categoria` em `vagas` — usamos o setor cadastrado da
+    // empresa (join acima) como aproximação mais confiável disponível.
+    categoria: comoSetor(row.empresas?.setor),
     bairro: row.bairro?.trim() || row.cidade?.trim() || "Balneário Camboriú",
     tipoContrato: comoTipoContrato(row.regime),
-    cargaHoraria: row.carga_horaria?.trim() || "A combinar",
+    // Não há coluna `carga_horaria` em `vagas`.
+    cargaHoraria: "A combinar",
     salario: row.salario?.trim() || "A combinar",
-    descricao: row.descricao,
+    descricao: row.descricao ?? "",
     requisitos: (row.requisitos ?? "")
       .split("\n")
       .map((linha) => linha.trim())
       .filter(Boolean),
-    trilhaRequeridaId: row.trilha_requerida_id ?? "",
-    aceitaCapacitacao: row.aceita_capacitacao ?? true,
+    // Não há coluna `trilha_requerida_id` em `vagas`: vagas vindas do banco
+    // não exigem trilha até essa coluna existir de fato.
+    trilhaRequeridaId: "",
+    // Não há coluna `aceita_capacitacao` em `vagas`; assume-se `true`.
+    aceitaCapacitacao: true,
     criadoEm: row.created_at,
     origem: "empresa",
   };
 }
 
-/** Dados do formulário -> payload de insert na tabela `vagas`. */
+/** Dados do formulário -> payload de insert na tabela `vagas` (só colunas reais). */
 export function vagaParaLinha(
   vaga: Omit<Vaga, "id" | "criadoEm" | "origem">
 ): Record<string, unknown> {
   return {
     titulo: vaga.titulo,
     descricao: vaga.descricao,
-    empresa_nome: vaga.empresa,
-    // `empresa_id` é FK uuid para `empresas`; as contas de empresa ainda são
-    // locais (LocalStorage), então guardamos o id local em outra coluna.
-    empresa_local_id: vaga.empresaId ?? null,
-    categoria: vaga.categoria,
+    empresa_id: vaga.empresaId ?? null,
     regime: vaga.tipoContrato,
     modalidade: "Presencial",
-    carga_horaria: vaga.cargaHoraria,
     salario: vaga.salario,
     requisitos: vaga.requisitos.join("\n"),
     bairro: vaga.bairro,
     cidade: "Balneário Camboriú",
-    trilha_requerida_id: vaga.trilhaRequeridaId || null,
-    aceita_capacitacao: vaga.aceitaCapacitacao,
     status: "ativa",
   };
 }
