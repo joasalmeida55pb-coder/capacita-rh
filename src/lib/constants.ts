@@ -2,6 +2,11 @@ import { PeriodoContratacao, SituacaoAtual, Setor, Turno } from "@/types";
 
 export const SETORES: Setor[] = ["Comércio", "Hotelaria", "Restaurante", "Serviços"];
 
+export const REGIMES_CONTRATO = ["CLT", "Temporário", "Meio período"] as const;
+
+export const ESCALAS = ["6x1", "5x2", "12x36", "Flexível", "A combinar"] as const;
+export type Escala = (typeof ESCALAS)[number];
+
 export const TURNOS: Turno[] = ["Manhã", "Tarde", "Noite"];
 
 export const SITUACOES: SituacaoAtual[] = [

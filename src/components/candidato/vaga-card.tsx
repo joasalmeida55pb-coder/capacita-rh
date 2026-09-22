@@ -36,7 +36,8 @@ export function VagaCard({
     ? getTrilhaById(vaga.trilhaRequeridaId)
     : undefined;
   const exigeTrilha = Boolean(vaga.trilhaRequeridaId);
-  const liberadaParaCandidatura = !exigeTrilha || trilhaConcluida;
+  // A candidatura nunca é bloqueada pela trilha — ela só é sugerida.
+  void trilhaConcluida;
 
   return (
     <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -89,23 +90,19 @@ export function VagaCard({
           <div className="flex items-center gap-2 text-sm font-medium text-teal-700">
             <CheckCircle2 className="h-4 w-4" /> Candidatura enviada!
           </div>
-        ) : liberadaParaCandidatura ? (
+        ) : (
           <Button className="w-full" onClick={() => setCandidatado(true)}>
             Aplicar para esta vaga
           </Button>
-        ) : (
-          <Button
-            variant="secondary"
-            className="w-full"
-            onClick={() => onIrParaTrilha(vaga.trilhaRequeridaId)}
-          >
-            Faça o curso rápido (2h) para liberar sua candidatura
-          </Button>
         )}
-        {trilha && !liberadaParaCandidatura && !candidatado && (
-          <p className="mt-2 text-center text-xs text-slate-400">
-            Trilha exigida: {trilha.titulo}
-          </p>
+        {exigeTrilha && trilha && !candidatado && (
+          <button
+            type="button"
+            onClick={() => onIrParaTrilha(vaga.trilhaRequeridaId)}
+            className="mt-2 w-full text-center text-xs text-teal-700 underline"
+          >
+            Curso rápido recomendado (2h): {trilha.titulo}
+          </button>
         )}
       </div>
     </div>

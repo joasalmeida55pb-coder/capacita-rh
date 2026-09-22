@@ -28,6 +28,8 @@ export type Vaga = {
   bairro: string | null
   cidade: string | null
   status: string | null
+  confidencial: boolean | null
+  escala: string | null
 }
 
 export type Empresa = {

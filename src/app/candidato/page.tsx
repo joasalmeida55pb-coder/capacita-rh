@@ -266,6 +266,12 @@ function CandidatoDashboard({
                 <dt className="text-slate-500">Bairro</dt>
                 <dd className="font-medium text-slate-900">{candidato.bairro}</dd>
               </div>
+              {candidato.cpf && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">CPF</dt>
+                  <dd className="font-medium text-slate-900">{candidato.cpf}</dd>
+                </div>
+              )}
               <div className="flex justify-between gap-4">
                 <dt className="text-slate-500">Situação atual</dt>
                 <dd className="font-medium text-slate-900">{candidato.situacaoAtual}</dd>
@@ -282,6 +288,24 @@ function CandidatoDashboard({
                   {candidato.areasInteresse.join(", ")}
                 </dd>
               </div>
+              {candidato.curriculoUrl && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">Currículo (arquivo)</dt>
+                  <dd className="font-medium text-teal-700">
+                    <a href={candidato.curriculoUrl} target="_blank" rel="noreferrer" className="underline">
+                      ver currículo
+                    </a>
+                  </dd>
+                </div>
+              )}
+              {candidato.curriculoTexto && (
+                <div>
+                  <dt className="text-slate-500">Currículo (texto)</dt>
+                  <dd className="mt-1 whitespace-pre-wrap font-medium text-slate-900">
+                    {candidato.curriculoTexto}
+                  </dd>
+                </div>
+              )}
             </dl>
           </div>
         ))}

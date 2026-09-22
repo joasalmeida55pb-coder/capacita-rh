@@ -13,6 +13,11 @@
  * no banco real). O nome e o setor da empresa vêm de um join com `empresas`
  * através da FK `vagas.empresa_id -> empresas.id`.
  *
+ * `confidencial` e `escala` são colunas novas (ver migracao-vaga-extra.sql).
+ * Enquanto essa migração não rodar no banco, `listarVagas`/`buscarVagaPorId`
+ * detectam o erro de coluna inexistente e repetem a consulta sem elas — a
+ * app continua funcionando, só sem esses dois campos.
+ *
  * Nenhuma função abaixo lança exceção: elas sempre devolvem
  * `{ dados, erro }`, e quem chama decide se cai para o mock.
  */
@@ -36,13 +41,24 @@ export interface VagaRow {
   bairro: string | null;
   cidade: string | null;
   status: string | null;
+  confidencial?: boolean | null;
+  escala?: string | null;
   /** Join `vagas.empresa_id -> empresas.id` (Supabase embeda como objeto ou null). */
   empresas: { nome: string | null; setor: string | null } | null;
 }
 
-const COLUNAS =
+const COLUNAS_BASE =
   "id, created_at, empresa_id, titulo, descricao, regime, modalidade, salario, " +
   "beneficios, requisitos, bairro, cidade, status, empresas(nome, setor)";
+
+/** Inclui `confidencial` e `escala` — colunas que podem não existir ainda. */
+const COLUNAS_COMPLETAS = `${COLUNAS_BASE}, confidencial, escala`;
+
+/** `true` quando o erro do Postgrest indica coluna/relação inexistente (schema desatualizado). */
+function erroDeColunaInexistente(mensagem: string | undefined): boolean {
+  if (!mensagem) return false;
+  return /column|schema cache|does not exist/i.test(mensagem);
+}
 
 const TIPOS_CONTRATO: TipoContrato[] = ["CLT", "Temporário", "Meio período"];
 
@@ -95,6 +111,8 @@ export function linhaParaVaga(row: VagaRow): Vaga {
     aceitaCapacitacao: true,
     criadoEm: row.created_at,
     origem: "empresa",
+    escala: row.escala?.trim() || undefined,
+    confidencial: row.confidencial ?? false,
   };
 }
 
@@ -113,7 +131,15 @@ export function vagaParaLinha(
     bairro: vaga.bairro,
     cidade: "Balneário Camboriú",
     status: "ativa",
+    confidencial: vaga.confidencial ?? false,
+    escala: vaga.escala || null,
   };
+}
+
+/** Payload sem `confidencial`/`escala`, para o fallback quando essas colunas não existem. */
+function semColunasExtras(payload: Record<string, unknown>): Record<string, unknown> {
+  const { confidencial: _confidencial, escala: _escala, ...resto } = payload;
+  return resto;
 }
 
 export interface Resultado<T> {
@@ -127,14 +153,27 @@ export async function listarVagas(): Promise<Resultado<Vaga[]>> {
     return { dados: null, erro: "Supabase não configurado (.env.local)." };
   }
 
-  const { data, error } = await supabase
+  const primeira = await supabase
     .from("vagas")
-    .select(COLUNAS)
+    .select(COLUNAS_COMPLETAS)
     .eq("status", "ativa")
     .order("created_at", { ascending: false });
+  let data: unknown = primeira.data;
+  let error = primeira.error;
+
+  if (error && erroDeColunaInexistente(error.message)) {
+    // `confidencial`/`escala` ainda não existem no banco — repete sem elas.
+    const retry = await supabase
+      .from("vagas")
+      .select(COLUNAS_BASE)
+      .eq("status", "ativa")
+      .order("created_at", { ascending: false });
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) return { dados: null, erro: mensagemDeErro(error) };
-  return { dados: (data as unknown as VagaRow[]).map(linhaParaVaga), erro: null };
+  return { dados: (data as VagaRow[]).map(linhaParaVaga), erro: null };
 }
 
 /** Consulta uma vaga pelo ID (uuid) diretamente no banco. */
@@ -146,15 +185,23 @@ export async function buscarVagaPorId(id: string): Promise<Resultado<Vaga>> {
     return { dados: null, erro: "ID fora do formato uuid — não está no banco." };
   }
 
-  const { data, error } = await supabase
+  const primeira = await supabase
     .from("vagas")
-    .select(COLUNAS)
+    .select(COLUNAS_COMPLETAS)
     .eq("id", id)
     .maybeSingle();
+  let data: unknown = primeira.data;
+  let error = primeira.error;
+
+  if (error && erroDeColunaInexistente(error.message)) {
+    const retry = await supabase.from("vagas").select(COLUNAS_BASE).eq("id", id).maybeSingle();
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) return { dados: null, erro: mensagemDeErro(error) };
   if (!data) return { dados: null, erro: null }; // não encontrada, sem erro
-  return { dados: linhaParaVaga(data as unknown as VagaRow), erro: null };
+  return { dados: linhaParaVaga(data as VagaRow), erro: null };
 }
 
 /** Grava uma nova vaga e devolve o registro já criado (com o uuid do banco). */
@@ -165,14 +212,28 @@ export async function inserirVaga(
     return { dados: null, erro: "Supabase não configurado (.env.local)." };
   }
 
-  const { data, error } = await supabase
+  const payload = vagaParaLinha(vaga);
+
+  const primeira = await supabase
     .from("vagas")
-    .insert(vagaParaLinha(vaga))
-    .select(COLUNAS)
+    .insert(payload)
+    .select(COLUNAS_COMPLETAS)
     .single();
+  let data: unknown = primeira.data;
+  let error = primeira.error;
+
+  if (error && erroDeColunaInexistente(error.message)) {
+    const retry = await supabase
+      .from("vagas")
+      .insert(semColunasExtras(payload))
+      .select(COLUNAS_BASE)
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) return { dados: null, erro: mensagemDeErro(error) };
-  return { dados: linhaParaVaga(data as unknown as VagaRow), erro: null };
+  return { dados: linhaParaVaga(data as VagaRow), erro: null };
 }
 
 export { supabaseConfigurado };

@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { SETORES, periodoParaTipoContrato } from "@/lib/constants";
+import { SETORES, ESCALAS, REGIMES_CONTRATO, periodoParaTipoContrato } from "@/lib/constants";
 import { trilhas } from "@/lib/mock-data";
-import type { Empresa, Setor, Vaga } from "@/types";
+import type { Empresa, Setor, TipoContrato, Vaga } from "@/types";
 
 /** Resultado de uma tentativa de publicar a vaga (Supabase ou fallback local). */
 export interface ResultadoPublicacao {
@@ -31,6 +31,9 @@ export function VagaForm({
 }) {
   const [titulo, setTitulo] = useState("");
   const [setor, setSetor] = useState<Setor>(empresa.setor);
+  const [regime, setRegime] = useState<TipoContrato>(periodoParaTipoContrato(empresa.periodo));
+  const [escala, setEscala] = useState("");
+  const [confidencial, setConfidencial] = useState(false);
   const [salario, setSalario] = useState("");
   const [aceitaCapacitacao, setAceitaCapacitacao] = useState(true);
   const [trilhaRequeridaId, setTrilhaRequeridaId] = useState("");
@@ -56,13 +59,15 @@ export function VagaForm({
       empresaId: empresa.id,
       categoria: setor,
       bairro: "Balneário Camboriú",
-      tipoContrato: periodoParaTipoContrato(empresa.periodo),
+      tipoContrato: regime,
       cargaHoraria: "A combinar",
       salario: salario.trim(),
       descricao: `Vaga de ${titulo.trim()} no setor de ${setor}, publicada por ${empresa.nome}.`,
       requisitos: [],
       trilhaRequeridaId,
       aceitaCapacitacao,
+      escala: escala || undefined,
+      confidencial,
     });
 
     setEnviando(false);
@@ -78,6 +83,8 @@ export function VagaForm({
     setSalario("");
     setTrilhaRequeridaId("");
     setAceitaCapacitacao(true);
+    setEscala("");
+    setConfidencial(false);
     onPublicada(resultado.vaga);
   }
 
@@ -127,6 +134,37 @@ export function VagaForm({
         </div>
 
         <div>
+          <Label htmlFor="regimeVaga">Regime</Label>
+          <Select
+            id="regimeVaga"
+            value={regime}
+            onChange={(e) => setRegime(e.target.value as TipoContrato)}
+          >
+            {REGIMES_CONTRATO.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        <div>
+          <Label htmlFor="escalaVaga">Escala</Label>
+          <Select
+            id="escalaVaga"
+            value={escala}
+            onChange={(e) => setEscala(e.target.value)}
+          >
+            <option value="">A combinar</option>
+            {ESCALAS.map((esc) => (
+              <option key={esc} value={esc}>
+                {esc}
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        <div>
           <Label htmlFor="salarioVaga">Salário aproximado</Label>
           <Input
             id="salarioVaga"
@@ -162,6 +200,19 @@ export function VagaForm({
           />
           <Label htmlFor="aceitaCapacitacao" className="mb-0 cursor-pointer">
             Aceita candidato em capacitação (ainda concluindo a trilha)
+          </Label>
+        </div>
+
+        <div className="flex items-center gap-2 sm:col-span-2">
+          <input
+            id="vagaConfidencial"
+            type="checkbox"
+            checked={confidencial}
+            onChange={(e) => setConfidencial(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+          />
+          <Label htmlFor="vagaConfidencial" className="mb-0 cursor-pointer">
+            Vaga confidencial (oculta o nome da empresa na listagem pública)
           </Label>
         </div>
       </div>

@@ -31,6 +31,10 @@ export interface Vaga {
   criadoEm: string;
   /** distingue vagas de exemplo das criadas por uma empresa cadastrada */
   origem: "seed" | "empresa";
+  /** Ex.: "6x1", "5x2", "12x36". Opcional — nem toda vaga define escala. */
+  escala?: string;
+  /** Quando true, a listagem pública mostra "Empresa Confidencial" no lugar do nome. */
+  confidencial?: boolean;
 }
 
 export interface Aula {
@@ -71,6 +75,12 @@ export interface CandidatoPerfil {
   disponibilidade: Turno[];
   areasInteresse: Setor[];
   criadoEm: string;
+  /** Opcional — nunca bloqueia cadastro nem navegação. */
+  cpf?: string;
+  /** Texto livre de currículo, preenchido diretamente no perfil. */
+  curriculoTexto?: string;
+  /** URL pública do arquivo enviado (PDF/DOCX) para o bucket `curriculos`. */
+  curriculoUrl?: string;
 }
 
 /** Conta + cadastro da empresa (login com e-mail/senha). */

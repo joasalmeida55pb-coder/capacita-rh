@@ -15,11 +15,12 @@ import {
   Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SETORES } from "@/lib/constants";
+import { SETORES, REGIMES_CONTRATO, ESCALAS } from "@/lib/constants";
+import { extrairSalarioNumero } from "@/lib/salario";
 import { useVagas } from "@/hooks/use-vagas";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import type { Setor, Vaga } from "@/types";
+import type { Setor, TipoContrato, Vaga } from "@/types";
 
 const categoriaCores: Record<Setor, string> = {
   Hotelaria: "bg-sky-50 text-sky-700",
@@ -39,19 +40,31 @@ export default function VagasPage() {
   const { vagas, fonte, carregando, erroConexao, recarregar } = useVagas();
   const [busca, setBusca] = useState("");
   const [setor, setSetor] = useState<Setor | "Todos">("Todos");
+  const [regime, setRegime] = useState<TipoContrato | "Todos">("Todos");
+  const [escala, setEscala] = useState<string>("Todos");
+  const [salarioMin, setSalarioMin] = useState("");
 
   const vagasFiltradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
+    const minimo = salarioMin.trim() ? Number(salarioMin) : null;
     return vagas.filter((vaga) => {
       const casaSetor = setor === "Todos" || vaga.categoria === setor;
       if (!casaSetor) return false;
+      const casaRegime = regime === "Todos" || vaga.tipoContrato === regime;
+      if (!casaRegime) return false;
+      const casaEscala = escala === "Todos" || (vaga.escala ?? "") === escala;
+      if (!casaEscala) return false;
+      if (minimo !== null) {
+        const valor = extrairSalarioNumero(vaga.salario);
+        if (valor === null || valor < minimo) return false;
+      }
       if (!termo) return true;
       return [vaga.titulo, vaga.empresa, vaga.bairro, vaga.descricao]
         .join(" ")
         .toLowerCase()
         .includes(termo);
     });
-  }, [vagas, busca, setor]);
+  }, [vagas, busca, setor, regime, escala, salarioMin]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -122,6 +135,47 @@ export default function VagasPage() {
         </div>
       </div>
 
+      {/* Filtros adicionais: regime, escala e faixa salarial */}
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <select
+          value={regime}
+          onChange={(e) => setRegime(e.target.value as TipoContrato | "Todos")}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm"
+          aria-label="Filtrar por regime"
+        >
+          <option value="Todos">Todos os regimes</option>
+          {REGIMES_CONTRATO.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={escala}
+          onChange={(e) => setEscala(e.target.value)}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm"
+          aria-label="Filtrar por escala"
+        >
+          <option value="Todos">Todas as escalas</option>
+          {ESCALAS.map((esc) => (
+            <option key={esc} value={esc}>
+              {esc}
+            </option>
+          ))}
+        </select>
+
+        <Input
+          type="number"
+          min={0}
+          value={salarioMin}
+          onChange={(e) => setSalarioMin(e.target.value)}
+          placeholder="Salário mínimo (R$)"
+          className="w-full sm:w-48"
+          aria-label="Filtrar por salário mínimo"
+        />
+      </div>
+
       {vagasFiltradas.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
           <p className="font-medium text-slate-900">Nenhuma vaga encontrada</p>
@@ -150,7 +204,9 @@ function VagaPublicaCard({ vaga }: { vaga: Vaga }) {
         <div className="flex items-start justify-between gap-2">
           <div>
             <h2 className="font-semibold text-slate-900">{vaga.titulo}</h2>
-            <p className="text-sm text-slate-500">{vaga.empresa}</p>
+            <p className="text-sm text-slate-500">
+              {vaga.confidencial ? "Empresa Confidencial" : vaga.empresa}
+            </p>
           </div>
           <span
             className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${categoriaCores[vaga.categoria]}`}

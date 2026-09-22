@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { SETORES, SITUACOES, TURNOS } from "@/lib/constants";
+import { formatarCpf, cpfValido } from "@/lib/cpf";
 import type { CandidatoPerfil, SituacaoAtual, Setor, Turno } from "@/types";
 
 type Modo = "entrar" | "cadastro";
@@ -32,6 +33,7 @@ export function CandidatoAuthForm({
   const [nomeCompleto, setNomeCompleto] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [bairro, setBairro] = useState("");
+  const [cpf, setCpf] = useState("");
   const [situacaoAtual, setSituacaoAtual] = useState<SituacaoAtual>(SITUACOES[0]);
   const [disponibilidade, setDisponibilidade] = useState<Turno[]>([]);
   const [areasInteresse, setAreasInteresse] = useState<Setor[]>([]);
@@ -69,6 +71,10 @@ export function CandidatoAuthForm({
       setErro("A senha deve ter pelo menos 4 caracteres.");
       return;
     }
+    if (cpf.trim() && !cpfValido(cpf)) {
+      setErro("CPF inválido — confira os números digitados (ou deixe em branco).");
+      return;
+    }
     if (disponibilidade.length === 0) {
       setErro("Selecione ao menos um turno de disponibilidade.");
       return;
@@ -84,6 +90,7 @@ export function CandidatoAuthForm({
       senha,
       whatsapp: whatsapp.trim(),
       bairro: bairro.trim(),
+      cpf: cpf.trim() || undefined,
       situacaoAtual,
       disponibilidade,
       areasInteresse,
@@ -224,6 +231,18 @@ export function CandidatoAuthForm({
                 value={bairro}
                 onChange={(e) => setBairro(e.target.value)}
                 placeholder="Ex: Centro, Barra Sul..."
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="cpfCandidato">CPF (opcional)</Label>
+              <Input
+                id="cpfCandidato"
+                value={cpf}
+                onChange={(e) => setCpf(formatarCpf(e.target.value))}
+                placeholder="000.000.000-00"
+                inputMode="numeric"
+                maxLength={14}
               />
             </div>
 

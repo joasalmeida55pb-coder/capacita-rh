@@ -8,11 +8,21 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { SETORES, SITUACOES, TURNOS } from "@/lib/constants";
+import { formatarCpf, cpfValido } from "@/lib/cpf";
+import { supabase } from "@/lib/supabase";
 import type { CandidatoPerfil, SituacaoAtual, Turno, Setor } from "@/types";
 
 export type CandidatoCamposEditaveis = Pick<
   CandidatoPerfil,
-  "nomeCompleto" | "whatsapp" | "bairro" | "situacaoAtual" | "disponibilidade" | "areasInteresse"
+  | "nomeCompleto"
+  | "whatsapp"
+  | "bairro"
+  | "situacaoAtual"
+  | "disponibilidade"
+  | "areasInteresse"
+  | "cpf"
+  | "curriculoTexto"
+  | "curriculoUrl"
 >;
 
 /** Edição dos dados de perfil de um candidato já logado (não mexe em e-mail/senha). */
@@ -26,10 +36,28 @@ export function CadastroForm({
   const [nomeCompleto, setNomeCompleto] = useState(perfilAtual.nomeCompleto);
   const [whatsapp, setWhatsapp] = useState(perfilAtual.whatsapp);
   const [bairro, setBairro] = useState(perfilAtual.bairro);
+  const [cpf, setCpf] = useState(perfilAtual.cpf ?? "");
+  const [curriculoTexto, setCurriculoTexto] = useState(perfilAtual.curriculoTexto ?? "");
+  const [curriculoUrl, setCurriculoUrl] = useState(perfilAtual.curriculoUrl ?? "");
+  const [enviandoArquivo, setEnviandoArquivo] = useState(false);
   const [situacaoAtual, setSituacaoAtual] = useState<SituacaoAtual>(perfilAtual.situacaoAtual);
   const [disponibilidade, setDisponibilidade] = useState<Turno[]>(perfilAtual.disponibilidade);
   const [areasInteresse, setAreasInteresse] = useState<Setor[]>(perfilAtual.areasInteresse);
   const [erro, setErro] = useState<string | null>(null);
+
+  async function enviarArquivoCurriculo(arquivo: File) {
+    if (!supabase) return;
+    setEnviandoArquivo(true);
+    const nomeArquivo = `${perfilAtual.email || "candidato"}-${Date.now()}-${arquivo.name}`.replace(/\s+/g, "-");
+    const { error } = await supabase.storage.from("curriculos").upload(nomeArquivo, arquivo, {
+      upsert: true,
+    });
+    if (!error) {
+      const { data } = supabase.storage.from("curriculos").getPublicUrl(nomeArquivo);
+      if (data?.publicUrl) setCurriculoUrl(data.publicUrl);
+    }
+    setEnviandoArquivo(false);
+  }
 
   function alternarTurno(turno: Turno) {
     setDisponibilidade((atual) =>
@@ -50,6 +78,10 @@ export function CadastroForm({
       setErro("Preencha nome completo, WhatsApp e bairro para continuar.");
       return;
     }
+    if (cpf.trim() && !cpfValido(cpf)) {
+      setErro("CPF inválido — confira os números digitados (ou deixe em branco).");
+      return;
+    }
     if (disponibilidade.length === 0) {
       setErro("Selecione ao menos um turno de disponibilidade.");
       return;
@@ -64,6 +96,9 @@ export function CadastroForm({
       nomeCompleto: nomeCompleto.trim(),
       whatsapp: whatsapp.trim(),
       bairro: bairro.trim(),
+      cpf: cpf.trim() || undefined,
+      curriculoTexto: curriculoTexto.trim() || undefined,
+      curriculoUrl: curriculoUrl.trim() || undefined,
       situacaoAtual,
       disponibilidade,
       areasInteresse,
@@ -117,6 +152,53 @@ export function CadastroForm({
             onChange={(e) => setBairro(e.target.value)}
             placeholder="Ex: Centro, Barra Sul..."
           />
+        </div>
+
+        <div>
+          <Label htmlFor="cpfPerfil">CPF (opcional)</Label>
+          <Input
+            id="cpfPerfil"
+            value={cpf}
+            onChange={(e) => setCpf(formatarCpf(e.target.value))}
+            placeholder="000.000.000-00"
+            inputMode="numeric"
+            maxLength={14}
+          />
+        </div>
+
+        <div className="sm:col-span-2">
+          <Label htmlFor="curriculoTexto">Currículo (texto)</Label>
+          <textarea
+            id="curriculoTexto"
+            value={curriculoTexto}
+            onChange={(e) => setCurriculoTexto(e.target.value)}
+            rows={5}
+            placeholder="Experiências, cursos e qualificações — pode colar o texto do seu currículo aqui."
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+          />
+        </div>
+
+        <div className="sm:col-span-2">
+          <Label htmlFor="curriculoArquivo">Currículo (arquivo PDF ou DOCX)</Label>
+          <input
+            id="curriculoArquivo"
+            type="file"
+            accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            onChange={(e) => {
+              const arquivo = e.target.files?.[0];
+              if (arquivo) void enviarArquivoCurriculo(arquivo);
+            }}
+            className="block w-full text-sm text-slate-600"
+          />
+          {enviandoArquivo && <p className="mt-1 text-xs text-slate-500">Enviando arquivo…</p>}
+          {curriculoUrl && !enviandoArquivo && (
+            <p className="mt-1 text-xs text-teal-700">
+              Arquivo enviado:{" "}
+              <a href={curriculoUrl} target="_blank" rel="noreferrer" className="underline">
+                ver currículo
+              </a>
+            </p>
+          )}
         </div>
 
         <div className="sm:col-span-2">

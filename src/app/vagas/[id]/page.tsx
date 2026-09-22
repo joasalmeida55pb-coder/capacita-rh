@@ -24,6 +24,7 @@ import { useParams } from 'next/navigation'
 import { supabase, type Vaga, type Empresa } from '@/lib/supabaseClient'
 import { CSS_EMPRESA } from '@/lib/estilos'
 import { urlVaga } from '@/lib/rotas'
+import { formatarCpf, cpfValido } from '@/lib/cpf'
 
 /* ------------------------------- estilos base ------------------------------ */
 
@@ -465,6 +466,7 @@ function TrilhaECandidatura({
   const [email, setEmail] = useState('')
   const [bairro, setBairro] = useState('')
   const [experiencia, setExperiencia] = useState('')
+  const [curriculoArquivo, setCurriculoArquivo] = useState<File | null>(null)
 
   const [erro, setErro] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
@@ -485,12 +487,28 @@ function TrilhaECandidatura({
     if (!whatsapp.trim()) return setErro('Informe o seu WhatsApp.')
     if (!cpf.trim() && !email.trim())
       return setErro('Informe o CPF ou o e-mail — precisamos de pelo menos um.')
-    if (!aceite) return setErro('Confirme a conclusão e o aceite da trilha de capacitação.')
+    if (cpf.trim() && !cpfValido(cpf)) return setErro('CPF inválido — confira os números digitados.')
+    if (!aceite) return setErro('Confirme o aceite para enviarmos os seus dados à empresa.')
 
     setEnviando(true)
 
     const cpfLimpo = cpf.replace(/\D/g, '')
     const emailLimpo = email.trim().toLowerCase()
+
+    /* Envio opcional do currículo (PDF/DOCX) para o bucket `curriculos`. */
+    let curriculoUrl: string | null = null
+    if (curriculoArquivo) {
+      const nomeArquivo = `${cpfLimpo || emailLimpo || Date.now()}-${curriculoArquivo.name}`.replace(/\s+/g, '-')
+      const { error: erroUpload } = await supabase.storage
+        .from('curriculos')
+        .upload(nomeArquivo, curriculoArquivo, { upsert: true })
+      if (!erroUpload) {
+        const { data: pub } = supabase.storage.from('curriculos').getPublicUrl(nomeArquivo)
+        curriculoUrl = pub?.publicUrl ?? null
+      }
+      // Se o bucket ainda não existir (migração pendente), seguimos sem
+      // bloquear a candidatura — o currículo só não fica anexado.
+    }
 
     /* 1. Reaproveitar o candidato, se já existir (por CPF, depois por e-mail). */
     let candidatoId: string | null = null
@@ -504,7 +522,7 @@ function TrilhaECandidatura({
       candidatoId = r.data?.[0]?.id ?? null
     }
 
-    const dadosCandidato = {
+    const dadosCandidato: Record<string, unknown> = {
       nome: nome.trim(),
       telefone: whatsapp.trim(),
       cpf: cpfLimpo || null,
@@ -512,6 +530,7 @@ function TrilhaECandidatura({
       bairro: bairro.trim() || null,
       experiencia: experiencia.trim() || null,
     }
+    if (curriculoUrl) dadosCandidato.curriculo_url = curriculoUrl
 
     /* 2. Criar ou atualizar o candidato. */
     if (candidatoId) {
@@ -560,7 +579,7 @@ function TrilhaECandidatura({
 
     let { error } = await supabase.from('candidaturas').insert({
       ...base,
-      trilha_concluida: true,
+      trilha_concluida: trilhaCompleta,
       trilha_area: trilha.area,
     })
 
@@ -708,7 +727,6 @@ function TrilhaECandidatura({
             <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-6">
               <button
                 type="button"
-                disabled={!trilhaCompleta}
                 onClick={() => {
                   setErro(null)
                   setPasso('dados')
@@ -719,7 +737,8 @@ function TrilhaECandidatura({
               </button>
               {!trilhaCompleta && (
                 <p className="text-sm text-gray-500">
-                  Marque os {trilha.modulos.length} módulos para continuar.
+                  Você pode se candidatar mesmo sem concluir todos os módulos agora — mas
+                  candidatos com a trilha concluída aparecem em destaque para a empresa.
                 </p>
               )}
             </div>
@@ -761,11 +780,15 @@ function TrilhaECandidatura({
             <Campo rotulo="CPF">
               <input
                 value={cpf}
-                onChange={(e) => setCpf(e.target.value)}
+                onChange={(e) => setCpf(formatarCpf(e.target.value))}
                 placeholder="000.000.000-00"
                 inputMode="numeric"
+                maxLength={14}
                 className={INPUT}
               />
+              {cpf.trim() && !cpfValido(cpf) && (
+                <p className="mt-1 text-xs text-red-600">CPF incompleto ou inválido.</p>
+              )}
             </Campo>
 
             <Campo rotulo="E-mail">
@@ -793,6 +816,18 @@ function TrilhaECandidatura({
               />
             </Campo>
 
+            <Campo className="md:col-span-2" rotulo="Currículo (PDF ou DOCX) — opcional">
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={(e) => setCurriculoArquivo(e.target.files?.[0] ?? null)}
+                className={INPUT}
+              />
+              {curriculoArquivo && (
+                <p className="mt-1 text-xs text-gray-500">Selecionado: {curriculoArquivo.name}</p>
+              )}
+            </Campo>
+
             <label className="flex cursor-pointer gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 md:col-span-2">
               <input
                 type="checkbox"
@@ -801,9 +836,15 @@ function TrilhaECandidatura({
                 className="mt-0.5 h-5 w-5 shrink-0 accent-emerald-600"
               />
               <span className="text-sm text-gray-700">
-                Confirmo que concluí os {trilha.modulos.length} módulos da trilha{' '}
-                <strong className="font-semibold">{trilha.area}</strong> ({totalHoras}h) e aceito
-                que os meus dados sejam partilhados com{' '}
+                {trilhaCompleta ? (
+                  <>
+                    Confirmo que concluí os {trilha.modulos.length} módulos da trilha{' '}
+                    <strong className="font-semibold">{trilha.area}</strong> ({totalHoras}h) e
+                  </>
+                ) : (
+                  <>Aceito enviar minha candidatura mesmo sem concluir a trilha agora e</>
+                )}{' '}
+                autorizo que os meus dados sejam partilhados com{' '}
                 <strong className="font-semibold">{empresa?.nome ?? 'a empresa'}</strong> para fins
                 de recrutamento.
               </span>

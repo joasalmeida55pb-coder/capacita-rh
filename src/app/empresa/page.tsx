@@ -12,6 +12,7 @@ import {
 } from '@/lib/supabaseClient'
 
 import { urlVaga } from '@/lib/rotas'
+import { ESCALAS } from '@/lib/constants'
 
 const REGIMES = ['CLT', 'Temporário', 'Estágio', 'Jovem Aprendiz', 'Freelancer', 'PJ']
 const MODALIDADES = ['Presencial', 'Híbrido', 'Remoto']
@@ -414,6 +415,8 @@ type FormVaga = {
   descricao: string
   regime: string
   modalidade: string
+  escala: string
+  confidencial: boolean
   salario: string
   beneficios: string
   requisitos: string
@@ -427,6 +430,8 @@ const FORM_VAZIO: FormVaga = {
   descricao: '',
   regime: 'CLT',
   modalidade: 'Presencial',
+  escala: '',
+  confidencial: false,
   salario: '',
   beneficios: '',
   requisitos: '',
@@ -563,6 +568,9 @@ function Painel({
   const alterarCampo = (campo: keyof FormVaga, valor: string) =>
     setForm((f) => ({ ...f, [campo]: valor }))
 
+  const alternarConfidencial = () =>
+    setForm((f) => ({ ...f, confidencial: !f.confidencial }))
+
   const submeterVaga = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!empresaId) return
@@ -573,12 +581,14 @@ function Painel({
 
     setSalvando(true)
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       empresa_id: empresaId,
       titulo: form.titulo.trim(),
       descricao: form.descricao.trim() || null,
       regime: form.regime || null,
       modalidade: form.modalidade || null,
+      escala: form.escala || null,
+      confidencial: form.confidencial,
       salario: form.salario.trim() || null,
       beneficios: form.beneficios.trim() || null,
       requisitos: form.requisitos.trim() || null,
@@ -587,9 +597,19 @@ function Painel({
       status: form.status || 'ativa',
     }
 
-    const { error } = editandoId
+    let { error } = editandoId
       ? await supabase.from('vagas').update(payload).eq('id', editandoId)
       : await supabase.from('vagas').insert(payload)
+
+    // `confidencial`/`escala` podem ainda não existir no banco (migração
+    // pendente) — se for esse o caso, regrava sem esses dois campos.
+    if (error && /column|schema cache|does not exist/i.test(error.message)) {
+      const { confidencial: _confidencial, escala: _escala, ...payloadSemExtras } = payload
+      const retry = editandoId
+        ? await supabase.from('vagas').update(payloadSemExtras).eq('id', editandoId)
+        : await supabase.from('vagas').insert(payloadSemExtras)
+      error = retry.error
+    }
 
     setSalvando(false)
 
@@ -615,6 +635,8 @@ function Painel({
       descricao: v.descricao ?? '',
       regime: v.regime ?? 'CLT',
       modalidade: v.modalidade ?? 'Presencial',
+      escala: v.escala ?? '',
+      confidencial: v.confidencial ?? false,
       salario: v.salario ?? '',
       beneficios: v.beneficios ?? '',
       requisitos: v.requisitos ?? '',
@@ -793,6 +815,33 @@ function Painel({
                     <option key={m}>{m}</option>
                   ))}
                 </select>
+              </Campo>
+
+              <Campo rotulo="Escala">
+                <select
+                  value={form.escala}
+                  onChange={(e) => alterarCampo('escala', e.target.value)}
+                  className={INPUT}
+                >
+                  <option value="">A combinar</option>
+                  {ESCALAS.map((esc) => (
+                    <option key={esc} value={esc}>
+                      {esc}
+                    </option>
+                  ))}
+                </select>
+              </Campo>
+
+              <Campo rotulo="Vaga confidencial">
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={form.confidencial}
+                    onChange={alternarConfidencial}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  Ocultar o nome da empresa na listagem pública
+                </label>
               </Campo>
 
               <Campo rotulo="Salário">
